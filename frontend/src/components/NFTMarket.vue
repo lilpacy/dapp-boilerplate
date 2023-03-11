@@ -1,76 +1,119 @@
-<template>
-  <div  class="nftmarket-container">
-    <h1>{{ msg }}</h1>
-      {{ state.sign }}
-      <button @click="_signMessage">Sign</button>
-      <button @click="list">List</button>
-  </div>
-</template>
-
 <script setup lang="ts">
-import {defineProps, reactive} from 'vue';
-import {ethers} from 'ethers';
-import {signMessage} from './../domains/usecases/sign';
-import {onListButtonClick} from './../domains/usecases/list';
+import {defineComponent, defineProps, reactive} from 'vue';
+import {approve721, list} from '../domains/usecases/seller/list';
+import {
+  erc20Contract,
+  erc20ContractAddress,
+  marketplaceContractAddress,
+  nftContract,
+  nftContractAddress
+} from "../lib/nftmarket";
+import {signerAddress} from "../lib/ethereum";
+import {approve20, buy} from "../domains/usecases/buyer/buy";
 
 defineProps<{ msg: string }>();
-const state = reactive({sign: ''})
-const updateSign = (sign: string) => {
-  state.sign = sign
+const initialState = {
+  signature: "",
+  approved: false,
+  messageHash: "",
+  txHash: "",
+  ownerOfTokenId1: "",
+  balance20: "",
+};
+const state = reactive(initialState);
+const updateApproved = (newApproved: boolean) => {
+  state.approved = newApproved;
+};
+const updateOwnerOfTokenId1 = (newOwner: string) => {
+  state.ownerOfTokenId1 = newOwner;
+};
+const updateBalance20 = (newBalance: string) => {
+  state.balance20 = newBalance;
+};
+
+async function _approve() {
+  await approve721()
 }
 
-async function _signMessage() {
-  const sign = await signMessage()
-  updateSign(sign)
+async function getApproved() {
+  const approved = await nftContract.isApprovedForAll(signerAddress, marketplaceContractAddress);
+  console.log({approved});
+  updateApproved(approved);
+};
+
+setInterval(() => {
+  getApproved();
+}, 3000);
+
+async function getOwnerOfTokenId1() {
+  const owner = await nftContract.ownerOf(1);
+  console.log({owner});
+  updateOwnerOfTokenId1(owner);
 }
 
-async function list() {
+setInterval(() => {
+  getOwnerOfTokenId1();
+}, 3000);
+
+async function getBalance20() {
+  const balance = await erc20Contract.balanceOf(signerAddress);
+  console.log({balance});
+  updateBalance20(balance.toString());
+}
+
+setInterval(() => {
+  getBalance20();
+}, 3000);
+
+async function _list() {
   // MetaMaskのインストール確認
   if (typeof window.ethereum === 'undefined') {
     alert('MetaMaskがインストールされていません。');
     return;
   }
-
   // MetaMaskの利用承認確認
   await window.ethereum.enable();
-
-  // Ethereumプロバイダの作成
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const signer = provider.getSigner()
-
-  await onListButtonClick(signer)
+  const {signature, messageHash, txHash} = await list()
+  state.signature = signature;
+  state.messageHash = messageHash;
+  state.txHash = txHash;
 }
 
-// async function purchaseToken(): Promise<void> {
-//   // MetaMaskのインストール確認
-//   if (typeof window.ethereum === 'undefined') {
-//     alert('MetaMaskがインストールされていません。');
-//     return;
-//   }
-//
-//   // MetaMaskの利用承認確認
-//   await window.ethereum.request({method: 'eth_requestAccounts'});
-//
-//   // Ethereumプロバイダの作成
-//   const provider = new ethers.providers.Web3Provider(window.ethereum);
-//
-//   // コントラクトアドレス
-//   const contractAddress = '0x...'; // Purchaseコントラクトのアドレス
-//
-//   // コントラクトのABI
-//   const contractAbi = [
-//     'function purchase() public',
-//   ];
-//
-//   // コントラクトインスタンスの作成
-//   const contract = new ethers.Contract(contractAddress, contractAbi, provider.getSigner());
-//
-//   // Purchaseメソッドを呼び出し
-//   const tx = await contract.purchase();
-//
-//   console.log(`Transaction hash: ${tx.hash}`);
-// }
+async function _buy() {
+  await approve20()
+  await buy()
+}
+
+defineComponent({
+  name: 'NFTMarket',
+  setup() {
+    return {
+      state
+    };
+  },
+});
 </script>
+
+<template>
+  <div class="nftmarket-container">
+    <h1>{{ msg }}</h1>
+
+    <p>Erc20: {{ erc20ContractAddress }}</p>
+    <p>Erc721: {{ nftContractAddress }}</p>
+    <p>Market: {{ marketplaceContractAddress }}</p>
+    <p>Approved: {{ state.approved }}</p>
+    <button @click="_approve">Approve</button>
+
+    <p>Signature: {{ state.signature }}</p>
+    <p>MessageHash: {{ state.messageHash }}</p>
+    <p>TxHash: {{ state.txHash }}</p>
+    <button @click="_list">List</button>
+
+    <p>Owner of tokenId 1: {{ state.ownerOfTokenId1}}</p>
+    <p>Your 20 balance: {{ state.balance20 }} </p>
+    <button @click="_buy">Buy</button>
+  </div>
+</template>
 
 <style scoped>
 .nftmarket-container {
