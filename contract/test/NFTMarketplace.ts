@@ -9,6 +9,8 @@ import {MyERC721} from "../typechain-types";
 import {BigNumber} from "@ethersproject/bignumber";
 import {Wallet} from 'ethers'
 
+const {hexlify, arrayify, splitSignature} = ethers.utils;
+
 describe("NFTMarketplace", () => {
   let nft: MyERC721;
   let erc20: MyERC20;
@@ -28,7 +30,7 @@ describe("NFTMarketplace", () => {
     marketplace = await new NFTMarketplace__factory(owner).deploy(nft.address, erc20.address);
   });
 
-  it("should allow seller to list an NFT for sale", async () => {
+  it("success; should allow seller to list an NFT for sale", async () => {
     const tokenId = 1; // 出品するNFTのトークンID
     const price = 100; // NFTを購入するために支払うERC20トークンの量
 
@@ -54,27 +56,17 @@ describe("NFTMarketplace", () => {
     const signature: string = await seller._signTypedData(domain, types, message);
     console.log({signature})
 
-// NFTを出品する
-    const messageHash: string = ethers.utils.keccak256(
-      ethers.utils.solidityPack(
-        ['string', 'bytes32'],
-        ['\x19\x01', ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['bytes'], [signature]))]
-      )
-    );
-    console.log({messageHash})
-
     await nft.connect(seller).approve(marketplace.address, tokenId);
-    await marketplace.connect(seller).list(tokenId, price, messageHash);
+    await marketplace.connect(seller).list(tokenId, price);
 
     const listing = await marketplace.listings(tokenId);
     expect(listing.tokenId).to.equal(tokenId);
     expect(listing.price).to.equal(price);
     expect(listing.seller).to.equal(sellerAddress);
-    expect(listing.messageHash).to.equal(messageHash);
     expect(listing.isSold).to.equal(false);
   });
 
-  it("should allow buyer to buy an NFT", async () => {
+  it("success; should allow buyer to buy an NFT", async () => {
     const tokenId = 1; // 出品するNFTのトークンID
     const price = 100; // NFTを購入するために支払うERC20トークンの量
 
@@ -100,17 +92,8 @@ describe("NFTMarketplace", () => {
     const signature: string = await seller._signTypedData(domain, types, message);
     console.log({signature})
 
-// NFTを出品する
-    const messageHash: string = ethers.utils.keccak256(
-      ethers.utils.solidityPack(
-        ['string', 'bytes32'],
-        ['\x19\x01', ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['bytes'], [signature]))]
-      )
-    );
-    console.log({messageHash})
-
     await nft.connect(seller).approve(marketplace.address, tokenId);
-    await marketplace.connect(seller).list(tokenId, price, messageHash);
+    await marketplace.connect(seller).list(tokenId, price);
 
     await erc20.connect(buyer).approve(marketplace.address, price);
     await marketplace.connect(buyer).buy(tokenId, signature);
@@ -120,5 +103,84 @@ describe("NFTMarketplace", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(buyerAddress);
     expect(await erc20.balanceOf(sellerAddress)).to.equal(BigNumber.from("100"));
     expect(await erc20.balanceOf(buyerAddress)).to.equal(BigNumber.from("900"));
+  });
+
+  it("success; should allow seller to cancel listing", async () => {
+    const tokenId = 1; // 出品するNFTのトークンID
+    const price = 100; // NFTを購入するために支払うERC20トークンの量
+ 
+    // EIP-712署名を作成する
+    const domain = {
+      name: 'NFTMarketplace',
+      version: '1',
+      chainId: 31337, // localhostのchain ID
+      verifyingContract: marketplace.address,
+    };
+    const types = {
+      Buy: [
+        {name: 'tokenId', type: 'uint256'},
+        {name: 'price', type: 'uint256'},
+        {name: 'seller', type: 'address'},
+      ],
+    };
+    const message = {
+      tokenId: tokenId,
+      price: price,
+      seller: sellerAddress,
+    };
+    const signature: string = await seller._signTypedData(domain, types, message);
+    const bytes = arrayify(signature);
+    const [r,s,v] = [hexlify(bytes.slice(0,32)), hexlify(bytes.slice(32,64)),bytes[64]]
+    const bytes32 = r
+    console.log({signature, bytes, r, s, v, bytes32})
+
+    await nft.connect(seller).approve(marketplace.address, tokenId);
+    await marketplace.connect(seller).list(tokenId, price);
+    await marketplace.connect(seller).cancel(tokenId, signature);
+
+    const canceled = await marketplace.canceled(bytes32);
+    expect(canceled).to.equal(true)
+  })
+
+  it("failure; should not allow buyer to buy cancel listing NFT", async () => {
+    const tokenId = 1; // 出品するNFTのトークンID
+    const price = 100; // NFTを購入するために支払うERC20トークンの量
+
+// EIP-712署名を作成する
+    const domain = {
+      name: 'NFTMarketplace',
+      version: '1',
+      chainId: 31337, // localhostのchain ID
+      verifyingContract: marketplace.address,
+    };
+    const types = {
+      Buy: [
+        {name: 'tokenId', type: 'uint256'},
+        {name: 'price', type: 'uint256'},
+        {name: 'seller', type: 'address'},
+      ],
+    };
+    const message = {
+      tokenId: tokenId,
+      price: price,
+      seller: sellerAddress,
+    };
+    const signature: string = await seller._signTypedData(domain, types, message);
+    console.log({signature})
+
+    await nft.connect(seller).approve(marketplace.address, tokenId);
+    await marketplace.connect(seller).list(tokenId, price);
+
+    const bytes = arrayify(signature);
+    const [r,s,v] = [hexlify(bytes.slice(0,32)), hexlify(bytes.slice(32,64)),bytes[64]]
+    const bytes32 = r
+    console.log({signature, bytes, r, s, v, bytes32})
+
+    await nft.connect(seller).approve(marketplace.address, tokenId);
+    await marketplace.connect(seller).list(tokenId, price);
+    await marketplace.connect(seller).cancel(tokenId, signature);
+
+    await erc20.connect(buyer).approve(marketplace.address, price);
+    expect(marketplace.connect(buyer).buy(tokenId, signature)).to.be.revertedWith("This order has been canceled");
   });
 });
