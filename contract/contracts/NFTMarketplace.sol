@@ -60,7 +60,7 @@ contract NFTMarketplace is EIP712 {
             ));
         bytes32 messageHash = _hashTypedDataV4(structHash);
 
-        console.logBytes32(bytes32(_signature));
+        console.logBytes32(keccak256(_signature));
         console.logBytes32(_LISTING_TYPEHASH);
         console.logBytes32(structHash);
         console.logBytes32(messageHash);
@@ -68,7 +68,7 @@ contract NFTMarketplace is EIP712 {
         address seller = listing.seller;
         address buyer = msg.sender;
 
-        require(!canceled[bytes32(_signature)], "This order has been canceled");
+        require(!canceled[keccak256(_signature)], "This order has been canceled");
         require(messageHash.recover(_signature) == seller, "Invalid signature");
         require(erc20.balanceOf(msg.sender) >= listing.price, "Insufficient balance");
 
@@ -93,6 +93,6 @@ contract NFTMarketplace is EIP712 {
             ));
         bytes32 messageHash = _hashTypedDataV4(structHash);
         require(messageHash.recover(_signature) == msg.sender, "Invalid signature");
-        canceled[bytes32(_signature)] = true;
+        canceled[keccak256(_signature)] = true;
     }
 }

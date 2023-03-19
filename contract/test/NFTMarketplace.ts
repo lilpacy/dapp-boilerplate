@@ -9,7 +9,7 @@ import {MyERC721} from "../typechain-types";
 import {BigNumber} from "@ethersproject/bignumber";
 import {Wallet} from 'ethers'
 
-const {hexlify, arrayify, splitSignature} = ethers.utils;
+const {keccak256} = ethers.utils;
 
 describe("NFTMarketplace", () => {
   let nft: MyERC721;
@@ -129,16 +129,13 @@ describe("NFTMarketplace", () => {
       seller: sellerAddress,
     };
     const signature: string = await seller._signTypedData(domain, types, message);
-    const bytes = arrayify(signature);
-    const [r,s,v] = [hexlify(bytes.slice(0,32)), hexlify(bytes.slice(32,64)),bytes[64]]
-    const bytes32 = r
-    console.log({signature, bytes, r, s, v, bytes32})
+    const hash = keccak256(signature)
 
     await nft.connect(seller).approve(marketplace.address, tokenId);
     await marketplace.connect(seller).list(tokenId, price);
     await marketplace.connect(seller).cancel(tokenId, signature);
 
-    const canceled = await marketplace.canceled(bytes32);
+    const canceled = await marketplace.canceled(hash);
     expect(canceled).to.equal(true)
   })
 
@@ -170,11 +167,6 @@ describe("NFTMarketplace", () => {
 
     await nft.connect(seller).approve(marketplace.address, tokenId);
     await marketplace.connect(seller).list(tokenId, price);
-
-    const bytes = arrayify(signature);
-    const [r,s,v] = [hexlify(bytes.slice(0,32)), hexlify(bytes.slice(32,64)),bytes[64]]
-    const bytes32 = r
-    console.log({signature, bytes, r, s, v, bytes32})
 
     await nft.connect(seller).approve(marketplace.address, tokenId);
     await marketplace.connect(seller).list(tokenId, price);
