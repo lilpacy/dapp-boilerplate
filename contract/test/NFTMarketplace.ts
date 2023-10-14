@@ -34,28 +34,6 @@ describe("NFTMarketplace", () => {
     const tokenId = 1; // 出品するNFTのトークンID
     const price = 100; // NFTを購入するために支払うERC20トークンの量
 
-// EIP-712署名を作成する
-    const domain = {
-      name: 'NFTMarketplace',
-      version: '1',
-      chainId: 31337, // localhostのchain ID
-      verifyingContract: marketplace.address,
-    };
-    const types = {
-      Buy: [
-        {name: 'tokenId', type: 'uint256'},
-        {name: 'price', type: 'uint256'},
-        {name: 'seller', type: 'address'},
-      ],
-    };
-    const message = {
-      tokenId: tokenId,
-      price: price,
-      seller: sellerAddress,
-    };
-    const signature: string = await seller._signTypedData(domain, types, message);
-    console.log({signature})
-
     await nft.connect(seller).approve(marketplace.address, tokenId);
     await marketplace.connect(seller).list(tokenId, price);
 
@@ -108,7 +86,7 @@ describe("NFTMarketplace", () => {
   it("success; should allow seller to cancel listing", async () => {
     const tokenId = 1; // 出品するNFTのトークンID
     const price = 100; // NFTを購入するために支払うERC20トークンの量
- 
+
     // EIP-712署名を作成する
     const domain = {
       name: 'NFTMarketplace',
