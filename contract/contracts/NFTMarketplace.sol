@@ -68,6 +68,7 @@ contract NFTMarketplace is EIP712 {
         address seller = listing.seller;
         address buyer = msg.sender;
 
+        // Signature is needed for this canceled validation
         require(!canceled[keccak256(_signature)], "This order has been canceled");
         require(messageHash.recover(_signature) == seller, "Invalid signature");
         require(erc20.balanceOf(msg.sender) >= listing.price, "Insufficient balance");
